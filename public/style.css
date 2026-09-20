@@ -123,6 +123,32 @@ main::before {
   border-left: 3px solid var(--margen);
 }
 
+/* NUEVO: tablas dentro de las respuestas del tutor */
+.mensaje.tutor table {
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  display: block;
+  overflow-x: auto;
+}
+.mensaje.tutor th,
+.mensaje.tutor td {
+  border: 1px solid var(--tinta-suave);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+}
+.mensaje.tutor th {
+  background: var(--papel);
+}
+
+/* NUEVO: botón de voz */
+.boton-voz {
+  margin-top: 0.5rem;
+  background: none;
+  border: 1.5px solid var(--tinta);
+  padding: 0.25rem 0.75rem;
+  color: var(--tinta);
+}
+.boton-voz:disabled { opacity: 0.6; cursor: wait; }
 .mensaje.error {
   color: var(--margen);
   font-weight: 700;

@@ -10,6 +10,12 @@ const MODELO = process.env.MODELO ?? "gemini-3.6-flash";
 const PUERTO = process.env.PUERTO ?? 3000;
 const ARCHIVO_USUARIOS = "usuarios.json"; // { "luis": "assistant_id...", ... }
 
+// ElevenLabs (voz)
+const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
+const VOZ_ID = process.env.VOZ_ID ?? "JBFqnCBsd6RMkjVDRZzb"; // voz predeterminada de ElevenLabs
+const MODELO_VOZ = "eleven_flash_v2_5"; // rápido y habla español
+const MAX_CARACTERES_VOZ = 1500; // cada carácter gasta 1 crédito: ponemos un tope
+
 const SYSTEM_PROMPT =
   "Eres un tutor paciente para estudiantes de Ingeniería en Sistemas. " +
   "Explicas en español, con ejemplos cortos y claros. " +
@@ -58,6 +64,61 @@ async function enviarABackboard(texto, { threadId, assistantId }) {
   return res.json();
 }
 
+// ¿La "respuesta" en realidad es un error del modelo?
+function esErrorDelLLM(r) {
+  return typeof r.content === "string" && r.content.startsWith("LLM Error");
+}
+
+// Si Gemini falla, espera un poco y vuelve a intentar (hasta 2 veces más)
+async function enviarConReintentos(texto, opciones) {
+  const esperas = [1000, 3000]; // milisegundos
+  let r = await enviarABackboard(texto, opciones);
+
+  for (const ms of esperas) {
+    if (!esErrorDelLLM(r)) return r;
+    console.warn(`Gemini falló, reintentando en ${ms / 1000} s...`);
+    await new Promise((resolver) => setTimeout(resolver, ms));
+    r = await enviarABackboard(texto, opciones);
+  }
+
+  if (esErrorDelLLM(r)) throw new Error(r.content); // se rindió
+  return r;
+}
+
+// ---------- Voz con ElevenLabs ----------
+
+// Quita el formato Markdown para que la voz no lea "asterisco asterisco"
+function limpiarParaVoz(texto) {
+  return texto
+    .replace(/```[\s\S]*?```/g, " (ver el código en pantalla) ") // bloques de código
+    .replace(/`([^`]*)`/g, "$1")              // `código` en línea
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [texto](link) -> texto
+    .replace(/^\s*#{1,6}\s*/gm, "")           // ### títulos
+    .replace(/^\s*>\s?/gm, "")                // > citas
+    .replace(/^\s*[-*_]{3,}\s*$/gm, "")        // --- separadores
+    .replace(/^\s*\|?[\s:-]*\|[\s|:-]*$/gm, "") // |---|---| de tablas
+    .replace(/\|/g, ", ")                      // | de tablas
+    .replace(/(\*\*|__|\*)/g, "")              // negritas e itálicas
+    .replace(/_/g, " ")                        // ID_Estudiante -> ID Estudiante
+    .replace(/^\s*[-*+]\s+/gm, "")            // viñetas
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+async function textoAVoz(texto) {
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOZ_ID}`, {
+    method: "POST",
+    headers: {
+      "xi-api-key": ELEVEN_KEY,
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
+    },
+    body: JSON.stringify({ text: texto, model_id: MODELO_VOZ }),
+  });
+  if (!res.ok) throw new Error(`ElevenLabs respondió ${res.status}: ${await res.text()}`);
+  return Buffer.from(await res.arrayBuffer()); // el audio MP3 en bytes
+}
+
 // ---------- El servidor ----------
 
 const app = express();
@@ -85,7 +146,7 @@ app.post("/chat", async (req, res) => {
     const assistantId = usuarios[usuario] ?? null;
 
     // 3. Mandar el mensaje a Backboard
-    const r = await enviarABackboard(mensaje, { threadId: thread_id, assistantId });
+    const r = await enviarConReintentos(mensaje, { threadId: thread_id, assistantId });
 
     // 4. Si es un usuario nuevo, guardar su asistente
     if (!assistantId && r.assistant_id) {
@@ -101,6 +162,30 @@ app.post("/chat", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al hablar con la IA" });
+  }
+});
+
+// Endpoint de voz: recibe texto y regresa un MP3
+// Body esperado: { "texto": "..." }
+app.post("/voz", async (req, res) => {
+  if (!ELEVEN_KEY) {
+    return res.status(500).json({ error: "Falta ELEVENLABS_API_KEY en el .env" });
+  }
+  const { texto } = req.body;
+  if (!texto) return res.status(400).json({ error: "Falta 'texto'" });
+
+  let limpio = limpiarParaVoz(texto);
+  if (limpio.length > MAX_CARACTERES_VOZ) {
+    limpio = limpio.slice(0, MAX_CARACTERES_VOZ) + "... El resto está en pantalla.";
+  }
+
+  try {
+    const audio = await textoAVoz(limpio);
+    res.set("Content-Type", "audio/mpeg"); // le avisamos al navegador que es audio
+    res.send(audio);
+  } catch (error) {
+    console.error(error);
+    res.status(502).json({ error: "No se pudo generar la voz" });
   }
 });
 
