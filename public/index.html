@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tutor de estudio</title>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Caveat:wght@600&display=swap" rel="stylesheet" />
+
+  <!-- marked: convierte el Markdown de la IA (**negritas**, ###) en HTML -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <!-- DOMPurify: limpia ese HTML para que nadie pueda inyectar código malicioso -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Tutor de estudio</h1>
+    <div>
+      <span id="quien"></span>
+      <button type="button" class="boton-texto" id="nueva">Nueva conversación</button>
+      <button type="button" class="boton-texto" id="cambiar">Cambiar usuario</button>
+    </div>
+  </header>
+
+  <main id="scroll">
+    <div id="mensajes" aria-live="polite"></div>
+  </main>
+
+  <form id="form-chat">
+    <textarea id="entrada" rows="1" placeholder="Pregúntale algo a tu tutor…" aria-label="Tu mensaje"></textarea>
+    <button type="submit" class="boton-enviar" id="enviar">Enviar</button>
+  </form>
+
+  <!-- Se muestra la primera vez para pedir el nombre -->
+  <div id="pantalla-nombre" hidden>
+    <form id="form-nombre">
+      <h2>¿Cómo te llamas?</h2>
+      <p>El tutor recordará tus temas y avances con este nombre.</p>
+      <input id="nombre" autocomplete="off" required placeholder="Ej. luis" />
+      <button type="submit" class="boton-enviar">Empezar</button>
+    </form>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

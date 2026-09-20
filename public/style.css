@@ -1,0 +1,204 @@
+:root {
+  --papel: #F7F9FC;      /* hoja cuadriculada */
+  --cuadro: #DCE6F2;     /* líneas de la cuadrícula */
+  --tinta: #1B2A4A;      /* texto principal */
+  --tinta-suave: #5A6B8C;
+  --margen: #E5484D;     /* línea roja del margen del cuaderno */
+  --marcatextos: #FFE45C;/* mensajes del alumno */
+  --blanco: #FFFFFF;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--tinta);
+  background-color: var(--papel);
+  background-image:
+    linear-gradient(var(--cuadro) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cuadro) 1px, transparent 1px);
+  background-size: 24px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem 0.5rem 3.5rem;
+  border-bottom: 2px solid var(--tinta);
+  background: var(--papel);
+}
+header h1 {
+  font-family: "Caveat", cursive;
+  font-size: 3.2rem;
+  line-height: 1;
+  margin: 0;
+}
+#quien {
+  color: var(--tinta-suave);
+  font-size: 0.95rem;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+.boton-texto {
+  background: none;
+  border: none;
+  color: var(--tinta);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0.25rem;
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 1.5rem 1.25rem 1.5rem 3.5rem;
+}
+main::before {
+  content: "";
+  position: fixed;
+  top: 0; bottom: 0;
+  left: 2.5rem;
+  width: 2px;
+  background: var(--margen);
+  opacity: 0.6;
+  pointer-events: none;
+}
+#mensajes {
+  max-width: 72ch;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mensaje { max-width: 100%; }
+
+
+.mensaje.alumno {
+  align-self: flex-end;
+  background:#0091ff;
+  padding: 0.5rem 0.9rem;
+  border-radius: 2px 14px 2px 14px;
+  max-width: 85%;
+  white-space: pre-wrap;
+}
+
+/* El tutor escribe como apuntes sobre la hoja */
+.mensaje.tutor {
+  background: var(--blanco);
+  border: 1.5px solid var(--tinta);
+  padding: 0.75rem 1rem;
+  box-shadow: 4px 4px 0 var(--tinta);
+}
+.mensaje.tutor h1, .mensaje.tutor h2, .mensaje.tutor h3 {
+  font-size: 1.1rem;
+  margin: 1rem 0 0.4rem;
+}
+.mensaje.tutor p { margin: 0.5rem 0; }
+.mensaje.tutor code {
+  background: var(--papel);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
+.mensaje.tutor pre {
+  background: var(--papel);
+  padding: 0.75rem;
+  overflow-x: auto;
+}
+.mensaje.tutor hr { border: none; border-top: 1px dashed var(--tinta-suave); }
+.mensaje.tutor blockquote {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--margen);
+}
+
+.mensaje.error {
+  color: var(--margen);
+  font-weight: 700;
+}
+.pensando {
+  color: var(--tinta-suave);
+  font-style: italic;
+}
+
+.vacio {
+  color: var(--tinta-suave);
+  font-family: "Caveat", cursive;
+  font-size: 1.6rem;
+}
+
+
+form {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1rem 3.5rem;
+  border-top: 2px solid var(--tinta);
+  background: var(--papel);
+}
+textarea {
+  flex: 1;
+  max-width: calc(72ch - 6rem);
+  font: inherit;
+  color: var(--tinta);
+  resize: none;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--tinta);
+  background: var(--blanco);
+  min-height: 2.8rem;
+  max-height: 10rem;
+}
+.boton-enviar {
+  background: var(--tinta);
+  color: var(--blanco);
+  border: none;
+  padding: 0 1.25rem;
+  font-weight: 700;
+}
+.boton-enviar:disabled { opacity: 0.5; cursor: wait; }
+
+:focus-visible { outline: 3px solid var(--margen); outline-offset: 2px; }
+
+/* ---------- Pantalla para poner tu nombre ---------- */
+#pantalla-nombre {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  background: rgba(247, 249, 252, 0.95);
+  padding: 1rem;
+}
+#pantalla-nombre[hidden] { display: none; }
+#pantalla-nombre form {
+  flex-direction: column;
+  border: 1.5px solid var(--tinta);
+  box-shadow: 6px 6px 0 var(--tinta);
+  background: var(--blanco);
+  padding: 1.5rem;
+  width: min(24rem, 100%);
+}
+#pantalla-nombre h2 {
+  font-family: "Caveat", cursive;
+  font-size: 2rem;
+  margin: 0;
+}
+#pantalla-nombre p { margin: 0 0 0.5rem; color: var(--tinta-suave); }
+#pantalla-nombre input {
+  font: inherit;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--tinta);
+}
+#pantalla-nombre .boton-enviar { padding: 0.6rem; }
+
+@media (max-width: 600px) {
+  header, main, form { padding-left: 2.75rem; }
+  main::before { left: 1.9rem; }
+}
