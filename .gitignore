@@ -2,3 +2,4 @@
 node_modules/
 estado.json
 usuarios.json
+esquema.sql
