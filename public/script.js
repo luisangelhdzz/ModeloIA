@@ -1,6 +1,8 @@
 // ---------- Estado de la app ----------
 let usuario = localStorage.getItem("usuario"); // se recuerda en este navegador
+let token = localStorage.getItem("token");     // pase de sesión (JWT)
 let threadId = null;                            // conversación actual
+let modoRegistro = false;                       // ¿la pantalla está en "crear cuenta"?
 
 // ---------- Referencias a elementos del HTML ----------
 const $mensajes = document.getElementById("mensajes");
@@ -9,25 +11,46 @@ const $formChat = document.getElementById("form-chat");
 const $entrada = document.getElementById("entrada");
 const $enviar = document.getElementById("enviar");
 const $quien = document.getElementById("quien");
-const $pantallaNombre = document.getElementById("pantalla-nombre");
+const $pantallaAcceso = document.getElementById("pantalla-acceso");
+const $formAcceso = document.getElementById("form-acceso");
+const $accesoTitulo = document.getElementById("acceso-titulo");
+const $accesoBoton = document.getElementById("acceso-boton");
+const $accesoCambiar = document.getElementById("acceso-cambiar");
+const $accesoError = document.getElementById("acceso-error");
+const $campoCodigo = document.getElementById("campo-codigo");
 
 // ---------- Pintar mensajes en pantalla ----------
 function agregarMensaje(tipo, contenido) {
-    const div = document.createElement("div");
-    div.className = `mensaje ${tipo}`;
-    if (tipo === "tutor") {
-        // Markdown -> HTML -> limpiado con DOMPurify
-        div.innerHTML = DOMPurify.sanitize(marked.parse(contenido));
-        div.appendChild(crearBotonVoz(contenido)); // NUEVO: botón de voz
-    } else {
-        div.textContent = contenido; // texto plano, nunca HTML
-    }
-    $mensajes.appendChild(div);
-    $scroll.scrollTop = $scroll.scrollHeight;
-    return div;
+  const div = document.createElement("div");
+  div.className = `mensaje ${tipo}`;
+  if (tipo === "tutor") {
+    // Markdown -> HTML -> limpiado con DOMPurify
+    div.innerHTML = DOMPurify.sanitize(marked.parse(contenido));
+    div.appendChild(crearBotonVoz(contenido));
+  } else {
+    div.textContent = contenido; // texto plano, nunca HTML
+  }
+  $mensajes.appendChild(div);
+  $scroll.scrollTop = $scroll.scrollHeight;
+  return div;
 }
 
-// ---------- NUEVO: Voz (ElevenLabs a través de nuestro servidor) ----------
+// ---------- Peticiones protegidas ----------
+// Toda petición protegida lleva el token en el encabezado Authorization
+function encabezados() {
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
+function cerrarSesion() {
+  token = null;
+  usuario = null;
+  localStorage.removeItem("token");
+  localStorage.removeItem("usuario");
+  threadId = null;
+  iniciar();
+}
+
+// ---------- Voz (ElevenLabs a través de nuestro servidor) ----------
 let audioActual = null; // para que solo suene una respuesta a la vez
 
 function crearBotonVoz(texto) {
@@ -38,22 +61,24 @@ function crearBotonVoz(texto) {
   let audio = null; // se genera solo la primera vez
 
   boton.addEventListener("click", async () => {
-    // Si está sonando, lo pausamos
     if (audio && !audio.paused) {
       audio.pause();
       return;
     }
 
-    // Primera vez: pedir el audio al servidor
     if (!audio) {
       boton.disabled = true;
       boton.textContent = "Generando voz…";
       try {
         const res = await fetch("/voz", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: encabezados(),
           body: JSON.stringify({ texto }),
         });
+        if (res.status === 401) {
+          cerrarSesion();
+          throw new Error("sesión vencida");
+        }
         if (!res.ok) {
           const datos = await res.json().catch(() => ({}));
           throw new Error(datos.error ?? `Error ${res.status}`);
@@ -70,7 +95,6 @@ function crearBotonVoz(texto) {
       }
     }
 
-    // Si otra respuesta está sonando, la callamos
     if (audioActual && audioActual !== audio) audioActual.pause();
     audioActual = audio;
 
@@ -81,96 +105,141 @@ function crearBotonVoz(texto) {
   return boton;
 }
 
-
 function mostrarVacio() {
-    $mensajes.innerHTML = "";
-    const p = document.createElement("p");
-    p.className = "vacio";
-    p.textContent = `Hola, ${usuario}. ¿Qué quieres repasar hoy?`;
-    $mensajes.appendChild(p);
+  $mensajes.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "vacio";
+  p.textContent = `Hola, ${usuario}. ¿Qué quieres repasar hoy?`;
+  $mensajes.appendChild(p);
 }
 
 // ---------- Hablar con NUESTRO servidor (no con Backboard) ----------
 async function enviar(texto) {
-    const cuerpo = { usuario, mensaje: texto };
-    if (threadId) cuerpo.thread_id = threadId;
+  const cuerpo = { mensaje: texto }; // el usuario ya va dentro del token
+  if (threadId) cuerpo.thread_id = threadId;
 
-    const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cuerpo),
-    });
-    const datos = await res.json();
-    if (!res.ok) throw new Error(datos.error ?? "Error desconocido");
-    return datos;
+  const res = await fetch("/chat", {
+    method: "POST",
+    headers: encabezados(),
+    body: JSON.stringify(cuerpo),
+  });
+  if (res.status === 401) {
+    cerrarSesion();
+    throw new Error("Tu sesión venció, vuelve a entrar");
+  }
+  const datos = await res.json();
+  if (!res.ok) throw new Error(datos.error ?? "Error desconocido");
+  return datos;
 }
 
 $formChat.addEventListener("submit", async (e) => {
-    e.preventDefault(); // evita que la página se recargue
-    const texto = $entrada.value.trim();
-    if (!texto) return;
+  e.preventDefault(); // evita que la página se recargue
+  const texto = $entrada.value.trim();
+  if (!texto) return;
 
-    document.querySelector(".vacio")?.remove();
-    agregarMensaje("alumno", texto);
-    $entrada.value = "";
-    $enviar.disabled = true;
+  document.querySelector(".vacio")?.remove();
+  agregarMensaje("alumno", texto);
+  $entrada.value = "";
+  $enviar.disabled = true;
 
-    const pensando = agregarMensaje("pensando", "El tutor está pensando…");
+  const pensando = agregarMensaje("pensando", "El tutor está pensando…");
 
-    try {
-        const datos = await enviar(texto);
-        threadId = datos.thread_id; // guardamos la conversación para el siguiente mensaje
-        pensando.remove();
-        agregarMensaje("tutor", datos.respuesta);
-    } catch (error) {
-        pensando.remove();
-        agregarMensaje("error", `No se pudo obtener respuesta: ${error.message}. Revisa la terminal del servidor.`);
-    } finally {
-        $enviar.disabled = false;
-        $entrada.focus();
-    }
+  try {
+    const datos = await enviar(texto);
+    threadId = datos.thread_id; // guardamos la conversación para el siguiente mensaje
+    pensando.remove();
+    agregarMensaje("tutor", datos.respuesta);
+  } catch (error) {
+    pensando.remove();
+    agregarMensaje("error", `No se pudo obtener respuesta: ${error.message}`);
+  } finally {
+    $enviar.disabled = false;
+    $entrada.focus();
+  }
 });
 
 // Enter envía; Shift + Enter hace salto de línea
 $entrada.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        $formChat.requestSubmit();
-    }
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    $formChat.requestSubmit();
+  }
 });
 
 // ---------- Botones del encabezado ----------
 document.getElementById("nueva").addEventListener("click", () => {
-    threadId = null; // conversación nueva, pero la memoria del usuario se conserva
-    mostrarVacio();
+  threadId = null; // conversación nueva, pero la memoria del usuario se conserva
+  mostrarVacio();
 });
 
-document.getElementById("cambiar").addEventListener("click", () => {
-    $pantallaNombre.hidden = false;
-    document.getElementById("nombre").focus();
+document.getElementById("salir").addEventListener("click", cerrarSesion);
+
+// ---------- Pantalla de acceso (entrar / crear cuenta) ----------
+$accesoCambiar.addEventListener("click", () => {
+  modoRegistro = !modoRegistro;
+  pintarPantallaAcceso();
 });
 
-// ---------- Pantalla de nombre ----------
-document.getElementById("form-nombre").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const nombre = document.getElementById("nombre").value.trim().toLowerCase();
-    if (!nombre) return;
-    usuario = nombre;
+function pintarPantallaAcceso() {
+  $accesoTitulo.textContent = modoRegistro ? "Crea tu cuenta" : "Entra a tu tutor";
+  $accesoBoton.textContent = modoRegistro ? "Crear cuenta" : "Entrar";
+  $accesoCambiar.textContent = modoRegistro ? "Ya tengo cuenta" : "Crear una cuenta";
+  $campoCodigo.hidden = !modoRegistro; // el código solo se pide al registrarse
+}
+
+$formAcceso.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nombre = document.getElementById("acceso-usuario").value.trim().toLowerCase();
+  const contrasena = document.getElementById("acceso-contrasena").value;
+  const codigo = document.getElementById("acceso-codigo").value.trim();
+
+  $accesoError.className = "acceso-error";
+  $accesoError.textContent = "";
+  $accesoBoton.disabled = true;
+
+  try {
+    const res = await fetch(modoRegistro ? "/registro" : "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: nombre, contrasena, codigo }),
+    });
+    const datos = await res.json();
+    if (!res.ok) throw new Error(datos.error ?? "No se pudo entrar");
+
+    // Al registrarse no hay token todavía: primero hay que confirmar el correo
+    if (datos.mensaje) {
+      modoRegistro = false;
+      pintarPantallaAcceso();
+      $accesoError.className = "acceso-aviso";
+      $accesoError.textContent = datos.mensaje;
+      return;
+    }
+
+    token = datos.token;
+    usuario = datos.usuario;
+    localStorage.setItem("token", token);
     localStorage.setItem("usuario", usuario);
+    $formAcceso.reset();
     threadId = null;
     iniciar();
+  } catch (error) {
+    $accesoError.textContent = error.message;
+  } finally {
+    $accesoBoton.disabled = false;
+  }
 });
 
 function iniciar() {
-    if (!usuario) {
-        $pantallaNombre.hidden = false;
-        document.getElementById("nombre").focus();
-        return;
-    }
-    $pantallaNombre.hidden = true;
-    $quien.textContent = `Usuario: ${usuario}`;
-    mostrarVacio();
-    $entrada.focus();
+  if (!token || !usuario) {
+    pintarPantallaAcceso();
+    $pantallaAcceso.hidden = false;
+    document.getElementById("acceso-usuario").focus();
+    return;
+  }
+  $pantallaAcceso.hidden = true;
+  $quien.textContent = `Usuario: ${usuario}`;
+  mostrarVacio();
+  $entrada.focus();
 }
 
 iniciar();

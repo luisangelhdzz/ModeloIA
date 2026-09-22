@@ -4,7 +4,7 @@
   --tinta: #1B2A4A;      /* texto principal */
   --tinta-suave: #5A6B8C;
   --margen: #E5484D;     /* línea roja del margen del cuaderno */
-  --marcatextos: #FFE45C;/* mensajes del alumno */
+  --marcatextos: #FFE45C;
   --blanco: #FFFFFF;
 }
 
@@ -25,7 +25,6 @@ body {
   display: flex;
   flex-direction: column;
 }
-
 
 header {
   display: flex;
@@ -84,10 +83,10 @@ main::before {
 
 .mensaje { max-width: 100%; }
 
-
 .mensaje.alumno {
   align-self: flex-end;
-  background:#0091ff;
+  background: #0091ff;
+  color: var(--blanco);
   padding: 0.5rem 0.9rem;
   border-radius: 2px 14px 2px 14px;
   max-width: 85%;
@@ -123,7 +122,7 @@ main::before {
   border-left: 3px solid var(--margen);
 }
 
-/* NUEVO: tablas dentro de las respuestas del tutor */
+/* Tablas dentro de las respuestas del tutor */
 .mensaje.tutor table {
   border-collapse: collapse;
   margin: 0.75rem 0;
@@ -136,11 +135,9 @@ main::before {
   padding: 0.35rem 0.6rem;
   text-align: left;
 }
-.mensaje.tutor th {
-  background: var(--papel);
-}
+.mensaje.tutor th { background: var(--papel); }
 
-/* NUEVO: botón de voz */
+/* Botón de voz */
 .boton-voz {
   margin-top: 0.5rem;
   background: none;
@@ -149,6 +146,7 @@ main::before {
   color: var(--tinta);
 }
 .boton-voz:disabled { opacity: 0.6; cursor: wait; }
+
 .mensaje.error {
   color: var(--margen);
   font-weight: 700;
@@ -163,7 +161,6 @@ main::before {
   font-family: "Caveat", cursive;
   font-size: 1.6rem;
 }
-
 
 form {
   display: flex;
@@ -195,34 +192,53 @@ textarea {
 
 :focus-visible { outline: 3px solid var(--margen); outline-offset: 2px; }
 
-/* ---------- Pantalla para poner tu nombre ---------- */
-#pantalla-nombre {
+/* ---------- Pantalla de acceso (entrar / crear cuenta) ---------- */
+#pantalla-acceso {
   position: fixed; inset: 0;
   display: grid; place-items: center;
   background: rgba(247, 249, 252, 0.95);
   padding: 1rem;
 }
-#pantalla-nombre[hidden] { display: none; }
-#pantalla-nombre form {
+#pantalla-acceso[hidden] { display: none; }
+#pantalla-acceso form {
   flex-direction: column;
+  gap: 0.35rem;
   border: 1.5px solid var(--tinta);
   box-shadow: 6px 6px 0 var(--tinta);
   background: var(--blanco);
   padding: 1.5rem;
   width: min(24rem, 100%);
 }
-#pantalla-nombre h2 {
+#pantalla-acceso h2 {
   font-family: "Caveat", cursive;
   font-size: 2rem;
-  margin: 0;
+  margin: 0 0 0.5rem;
 }
-#pantalla-nombre p { margin: 0 0 0.5rem; color: var(--tinta-suave); }
-#pantalla-nombre input {
+#pantalla-acceso label {
+  font-size: 0.9rem;
+  color: var(--tinta-suave);
+}
+#pantalla-acceso input {
   font: inherit;
+  width: 100%;
   padding: 0.6rem 0.75rem;
   border: 1.5px solid var(--tinta);
+  margin-bottom: 0.5rem;
 }
-#pantalla-nombre .boton-enviar { padding: 0.6rem; }
+#campo-codigo[hidden] { display: none; }
+.acceso-aviso {
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  min-height: 1.2em;
+}
+.acceso-error {
+  color: var(--margen);
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  min-height: 1.2em;
+}
+#pantalla-acceso .boton-enviar { padding: 0.6rem; }
 
 @media (max-width: 600px) {
   header, main, form { padding-left: 2.75rem; }
