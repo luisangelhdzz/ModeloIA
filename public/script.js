@@ -319,3 +319,27 @@ function iniciar() {
 }
 
 iniciar();
+
+// ---------- Animación del título, letra por letra ----------
+function animarTitulo() {
+  const titulo = document.querySelector("header h1");
+  if (!titulo) return;
+
+  const texto = titulo.textContent.trim();
+  // El aria-label deja que un lector de pantalla lea la frase completa
+  // en vez de deletrear letra por letra
+  titulo.setAttribute("aria-label", texto);
+  titulo.textContent = "";
+
+  [...texto].forEach((caracter, i) => {
+    const span = document.createElement("span");
+    span.className = caracter === " " ? "letter space" : "letter";
+    // \u00A0 es un espacio duro: un espacio normal desaparecería en inline-block
+    span.textContent = caracter === " " ? "\u00A0" : caracter;
+    span.style.setProperty("--letter-delay", `${i * 0.045}s`); // cascada
+    span.setAttribute("aria-hidden", "true");
+    titulo.appendChild(span);
+  });
+}
+
+animarTitulo();

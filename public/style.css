@@ -36,10 +36,79 @@ header {
   background: var(--papel);
 }
 header h1 {
-  font-family: "Arial", cursive;
-  font-size: 3.9rem;
-  line-height: 1;
   margin: 0;
+  font-size: clamp(1.9rem, 6vw, 3.6rem);
+  line-height: 0.9;
+  letter-spacing: -0.065em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Cada letra del título se revela por separado (ver animarTitulo en script.js) */
+header h1 .letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.35em);
+  color: var(--tinta);
+  text-shadow: none;
+  /* El ciclo completo dura 4.5 s: se revela, se queda un rato y vuelve a empezar */
+  animation: letterReveal 4.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: var(--letter-delay, 0s);
+}
+
+header h1 .letter.space {
+  animation: none;
+  opacity: 1;
+}
+
+@keyframes letterReveal {
+  /* Los porcentajes están calculados sobre 4.5 s.
+     La aparición ocupa los primeros 0.59 s (13.1%), igual que la animación original. */
+  0% {
+    opacity: 0;
+    transform: translateY(0.35em);
+    color: var(--tinta);
+    text-shadow: none;
+  }
+  6.6% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--tinta);
+    text-shadow: none;
+  }
+  8.9% {
+    /* Destello. En fondo claro se nota más en azul:
+       0 0 18px rgba(26,115,231,.9), 0 0 42px rgba(26,115,231,.55), 0 0 80px rgba(26,115,231,.3) */
+    color: var(--tinta);
+    text-shadow: 0 0 18px rgba(255, 255, 255, 0.95), 0 0 42px rgba(255, 255, 255, 0.7), 0 0 80px rgba(255, 255, 255, 0.4);
+  }
+  13.1% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--tinta);
+    text-shadow: none;
+  }
+  /* Se queda quieto y visible casi todo el ciclo */
+  88% {
+    opacity: 1;
+    transform: translateY(0);
+    text-shadow: none;
+  }
+  /* Se desvanece para que el reinicio no se vea como un parpadeo */
+  96%, 100% {
+    opacity: 0;
+    transform: translateY(0.35em);
+    text-shadow: none;
+  }
+}
+
+/* Si el usuario pidió menos movimiento, el título aparece sin animarse */
+@media (prefers-reduced-motion: reduce) {
+  header h1 .letter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 #quien {
   color: var(--tinta-suave);
