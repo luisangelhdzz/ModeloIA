@@ -438,14 +438,18 @@ app.post("/voz", autenticar, async (req, res) => {
   }
 });
 
+// IMPORTANTE: primero abrimos el puerto y luego probamos la base.
+// Si lo hiciéramos al revés y la base tardara, el hosting pensaría
+// que la app nunca arrancó y cancelaría el despliegue.
+app.listen(PUERTO, () => {
+  console.log(`Servidor escuchando en el puerto ${PUERTO}`);
+});
+
+// La prueba de conexión ya no detiene el arranque: solo avisa en los logs.
 try {
   await db.probarConexion();
   console.log("Conectado a MySQL");
 } catch (error) {
-  console.error("No se pudo conectar a MySQL:", error.message);
-  process.exit(1);
+  console.error("Aviso: no se pudo conectar a MySQL:", error.message);
+  console.error("El servidor sigue arriba; las rutas que usan la base fallarán hasta que responda.");
 }
-
-app.listen(PUERTO, () => {
-  console.log(`Servidor escuchando en http://localhost:${PUERTO}`);
-});

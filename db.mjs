@@ -24,6 +24,7 @@ const pool = mysql.createPool({
   ssl,
   waitForConnections: true,
   connectionLimit: 10,
+  connectTimeout: 15000, // si en 15 s no conecta, falla en vez de colgarse
 });
 
 // Prueba la conexión al arrancar, para enterarnos de inmediato si algo falta
