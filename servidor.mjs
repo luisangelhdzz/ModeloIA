@@ -2,7 +2,7 @@
 // Ejecutar con:  node --env-file=.env servidor.mjs
 
 import express from "express";
-import { readFile, writeFile } from "node:fs/promises";
+import * as db from "./db.mjs";        // nuestras consultas a MySQL
 import bcrypt from "bcryptjs";          // para guardar contraseñas cifradas
 import jwt from "jsonwebtoken";         // para los "pases" de sesión
 import nodemailer from "nodemailer";    // para enviar correos
@@ -11,8 +11,8 @@ import { randomBytes } from "node:crypto";
 const API_URL = "https://app.backboard.io/api/threads/messages";
 const API_KEY = process.env.BACKBOARD_API_KEY;
 const MODELO = process.env.MODELO ?? "gemini-3.6-flash";
-const PUERTO = process.env.PUERTO ?? 3000;
-const ARCHIVO_USUARIOS = "usuarios.json"; // { "luis": "assistant_id...", ... }
+// Render (y casi todos los hostings) asignan el puerto con la variable PORT
+const PUERTO = process.env.PORT ?? process.env.PUERTO ?? 3000;
 
 // ElevenLabs (voz)
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
@@ -27,6 +27,10 @@ const LIMITE_CHAT_HORA = 40;  // mensajes por usuario por hora
 const LIMITE_VOZ_HORA = 15;   // audios por usuario por hora
 
 // Correo (verificación de cuenta)
+// Opción 1 (para la nube): Brevo, que envía por HTTPS
+// Opción 2 (solo en local): Gmail por SMTP, bloqueado en muchos hostings
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const CORREO_REMITENTE = process.env.CORREO_REMITENTE; // remitente validado en Brevo
 const SMTP_USER = process.env.SMTP_USER; // tu correo de Gmail
 const SMTP_PASS = process.env.SMTP_PASS; // contraseña de aplicación de Google
 const URL_BASE = process.env.URL_BASE ?? `http://localhost:${PUERTO}`;
@@ -38,24 +42,51 @@ const correo = SMTP_USER && SMTP_PASS
     })
   : null;
 
+async function enviarConBrevo(destino, asunto, textoPlano, html) {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": BREVO_API_KEY,
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: "Tutor de estudio", email: CORREO_REMITENTE },
+      to: [{ email: destino }],
+      subject: asunto,
+      textContent: textoPlano,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) throw new Error(`Brevo respondió ${res.status}: ${await res.text()}`);
+}
+
 async function enviarVerificacion(destino, tokenVerificacion) {
   const liga = `${URL_BASE}/verificar?token=${tokenVerificacion}`;
+  const asunto = "Confirma tu cuenta del Tutor de estudio";
+  const textoPlano = `Confirma tu cuenta abriendo esta liga:\n${liga}\n\nSi no fuiste tú, ignora este mensaje.`;
+  const html = `<p>Confirma tu cuenta dando clic en la siguiente liga:</p>
+                <p><a href="${liga}">Confirmar mi cuenta</a></p>
+                <p>Si no fuiste tú, ignora este mensaje.</p>`;
 
-  if (!correo) {
-    // Sin SMTP configurado: mostramos la liga en la terminal para poder probar
-    console.log(`\n[Verificación] Liga para ${destino}:\n${liga}\n`);
+  if (BREVO_API_KEY && CORREO_REMITENTE) {
+    await enviarConBrevo(destino, asunto, textoPlano, html);
     return;
   }
 
-  await correo.sendMail({
-    from: `"Tutor de estudio" <${SMTP_USER}>`,
-    to: destino,
-    subject: "Confirma tu cuenta del Tutor de estudio",
-    text: `Confirma tu cuenta abriendo esta liga:\n${liga}\n\nSi no fuiste tú, ignora este mensaje.`,
-    html: `<p>Confirma tu cuenta dando clic en la siguiente liga:</p>
-           <p><a href="${liga}">Confirmar mi cuenta</a></p>
-           <p>Si no fuiste tú, ignora este mensaje.</p>`,
-  });
+  if (correo) {
+    await correo.sendMail({
+      from: `"Tutor de estudio" <${SMTP_USER}>`,
+      to: destino,
+      subject: asunto,
+      text: textoPlano,
+      html,
+    });
+    return;
+  }
+
+  // Sin correo configurado: mostramos la liga en la terminal para poder probar
+  console.log(`\n[Verificación] Liga para ${destino}:\n${liga}\n`);
 }
 
 if (!JWT_SECRET) {
@@ -71,26 +102,6 @@ const SYSTEM_PROMPT =
 if (!API_KEY) {
   console.error("Falta BACKBOARD_API_KEY en tu archivo .env");
   process.exit(1);
-}
-
-// ---------- "Base de datos" simple: un archivo JSON ----------
-
-// Formato: { "luis": { "hash": "...", "assistant_id": "..." } }
-async function leerUsuarios() {
-  try {
-    const datos = JSON.parse(await readFile(ARCHIVO_USUARIOS, "utf8"));
-    // Compatibilidad con el formato viejo, donde el valor era solo el assistant_id
-    for (const [nombre, valor] of Object.entries(datos)) {
-      if (typeof valor === "string") datos[nombre] = { assistant_id: valor };
-    }
-    return datos;
-  } catch {
-    return {}; // Aún no existe el archivo
-  }
-}
-
-async function guardarUsuarios(usuarios) {
-  await writeFile(ARCHIVO_USUARIOS, JSON.stringify(usuarios, null, 2));
 }
 
 // ---------- Hablar con Backboard ----------
@@ -231,8 +242,8 @@ app.post("/registro", async (req, res) => {
     return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
   }
 
-  const usuarios = await leerUsuarios();
-  if (usuarios[correoUsuario]?.hash && usuarios[correoUsuario]?.verificado) {
+  const existente = await db.buscarPorCorreo(correoUsuario);
+  if (existente?.verificado) {
     return res.status(409).json({ error: "Ese correo ya tiene cuenta" });
   }
 
@@ -240,13 +251,12 @@ app.post("/registro", async (req, res) => {
   const hash = await bcrypt.hash(contrasena, 10);
   const tokenVerificacion = randomBytes(24).toString("hex");
 
-  usuarios[correoUsuario] = {
-    ...(usuarios[correoUsuario] ?? {}),
-    hash,
-    verificado: false,
-    token_verificacion: tokenVerificacion,
-  };
-  await guardarUsuarios(usuarios);
+  if (existente) {
+    // Se registró antes pero nunca confirmó: le renovamos los datos
+    await db.renovarRegistro(existente.id, hash, tokenVerificacion);
+  } else {
+    await db.crearUsuario(correoUsuario, hash, tokenVerificacion);
+  }
 
   try {
     await enviarVerificacion(correoUsuario, tokenVerificacion);
@@ -262,21 +272,15 @@ app.post("/registro", async (req, res) => {
 // Confirmar la cuenta desde la liga del correo
 app.get("/verificar", async (req, res) => {
   const { token: tokenVerificacion } = req.query;
-  const usuarios = await leerUsuarios();
+  const usuario = tokenVerificacion
+    ? await db.buscarPorTokenVerificacion(tokenVerificacion)
+    : null;
 
-  const entrada = Object.entries(usuarios).find(
-    ([, datos]) => datos.token_verificacion && datos.token_verificacion === tokenVerificacion
-  );
-
-  if (!entrada) {
+  if (!usuario) {
     return res.status(400).send("<h1>Liga inválida o ya usada</h1><p><a href=\"/\">Ir al tutor</a></p>");
   }
 
-  const [correoUsuario, datos] = entrada;
-  delete datos.token_verificacion; // la liga solo sirve una vez
-  datos.verificado = true;
-  usuarios[correoUsuario] = datos;
-  await guardarUsuarios(usuarios);
+  await db.marcarVerificado(usuario.id); // esto también borra el token: la liga sirve una vez
 
   res.send("<h1>¡Cuenta confirmada!</h1><p>Ya puedes <a href=\"/\">entrar al tutor</a>.</p>");
 });
@@ -286,17 +290,16 @@ app.get("/verificar", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { usuario, contrasena } = req.body;
   const correoUsuario = (usuario ?? "").trim().toLowerCase();
-  const usuarios = await leerUsuarios();
-  const registro = usuarios[correoUsuario];
+  const registro = await db.buscarPorCorreo(correoUsuario);
 
   // Comparamos siempre, exista o no, y damos el mismo mensaje:
-  // así nadie puede averiguar qué usuarios existen
-  const ok = registro?.hash
-    ? await bcrypt.compare(contrasena ?? "", registro.hash)
+  // así nadie puede averiguar qué correos están registrados
+  const ok = registro
+    ? await bcrypt.compare(contrasena ?? "", registro.hash_contrasena)
     : false;
 
   if (!ok) return res.status(401).json({ error: "Correo o contraseña incorrectos" });
-  if (registro.verificado === false) {
+  if (!registro.verificado) {
     return res.status(403).json({ error: "Falta confirmar tu correo. Revisa tu bandeja." });
   }
 
@@ -318,18 +321,38 @@ app.post("/chat", autenticar, async (req, res) => {
   }
 
   try {
-    // 2. Buscar el asistente de ESTE usuario (cada quien tiene su memoria)
-    const usuarios = await leerUsuarios();
-    const assistantId = usuarios[usuario]?.assistant_id ?? null;
+    // 2. Buscar al usuario en la base (ahí vive su assistant_id)
+    const registro = await db.buscarPorCorreo(usuario);
+    if (!registro) return res.status(401).json({ error: "Cuenta no encontrada" });
+
+    // Si manda un thread_id, comprobamos que sea suyo
+    let conversacionId = null;
+    if (thread_id) {
+      conversacionId = await db.idDeSuConversacion(registro.id, thread_id);
+      if (!conversacionId) {
+        return res.status(403).json({ error: "Esa conversación no es tuya" });
+      }
+    }
+
+    const assistantId = registro.assistant_id;
 
     // 3. Mandar el mensaje a Backboard
     const r = await enviarConReintentos(mensaje, { threadId: thread_id, assistantId });
 
     // 4. Si es un usuario nuevo, guardar su asistente
     if (!assistantId && r.assistant_id) {
-      const actuales = await leerUsuarios();
-      actuales[usuario] = { ...(actuales[usuario] ?? {}), assistant_id: r.assistant_id };
-      await guardarUsuarios(actuales);
+      await db.guardarAssistant(registro.id, r.assistant_id);
+    }
+
+    // 4b. Si empezó una conversación nueva, la guardamos con el primer mensaje como título
+    if (!conversacionId && r.thread_id) {
+      conversacionId = await db.crearConversacion(registro.id, r.thread_id, mensaje.slice(0, 100));
+    }
+
+    // 4c. Guardamos los dos mensajes para poder mostrarlos después
+    if (conversacionId) {
+      await db.guardarMensaje(conversacionId, "alumno", mensaje);
+      await db.guardarMensaje(conversacionId, "tutor", r.content);
     }
 
     // 5. Responder al cliente
@@ -341,6 +364,50 @@ app.post("/chat", autenticar, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al hablar con la IA" });
+  }
+});
+
+// Lista de conversaciones del usuario
+app.get("/conversaciones", autenticar, async (req, res) => {
+  try {
+    const registro = await db.buscarPorCorreo(req.usuario);
+    if (!registro) return res.status(401).json({ error: "Cuenta no encontrada" });
+    res.json({ conversaciones: await db.listarConversaciones(registro.id) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "No se pudieron leer las conversaciones" });
+  }
+});
+
+// Mensajes de una conversación
+app.get("/conversaciones/:threadId/mensajes", autenticar, async (req, res) => {
+  try {
+    const registro = await db.buscarPorCorreo(req.usuario);
+    if (!registro) return res.status(401).json({ error: "Cuenta no encontrada" });
+
+    const conversacionId = await db.idDeSuConversacion(registro.id, req.params.threadId);
+    if (!conversacionId) return res.status(404).json({ error: "Conversación no encontrada" });
+
+    res.json({ mensajes: await db.listarMensajes(conversacionId) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "No se pudieron leer los mensajes" });
+  }
+});
+
+// Borrar una conversación
+app.delete("/conversaciones/:threadId", autenticar, async (req, res) => {
+  try {
+    const registro = await db.buscarPorCorreo(req.usuario);
+    if (!registro) return res.status(401).json({ error: "Cuenta no encontrada" });
+
+    const borrada = await db.borrarConversacion(registro.id, req.params.threadId);
+    if (!borrada) return res.status(404).json({ error: "Conversación no encontrada" });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "No se pudo borrar" });
   }
 });
 
@@ -370,6 +437,14 @@ app.post("/voz", autenticar, async (req, res) => {
     res.status(502).json({ error: "No se pudo generar la voz" });
   }
 });
+
+try {
+  await db.probarConexion();
+  console.log("Conectado a MySQL");
+} catch (error) {
+  console.error("No se pudo conectar a MySQL:", error.message);
+  process.exit(1);
+}
 
 app.listen(PUERTO, () => {
   console.log(`Servidor escuchando en http://localhost:${PUERTO}`);

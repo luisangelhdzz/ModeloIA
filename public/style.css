@@ -36,8 +36,8 @@ header {
   background: var(--papel);
 }
 header h1 {
-  font-family: "Caveat", cursive;
-  font-size: 3.2rem;
+  font-family: "Arial", cursive;
+  font-size: 3.9rem;
   line-height: 1;
   margin: 0;
 }
@@ -58,6 +58,72 @@ button {
   padding: 0.25rem;
 }
 
+/* ---------- Estructura: barra lateral + chat ---------- */
+.contenido {
+  flex: 1;
+  display: flex;
+  min-height: 0; /* deja que los hijos hagan scroll */
+}
+
+#barra {
+  width: 15rem;
+  flex-shrink: 0;
+  border-right: 2px solid var(--tinta);
+  background: var(--papel);
+  padding: 0.75rem;
+  overflow-y: auto;
+}
+#barra .boton-enviar {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+#lista-conversaciones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+#lista-conversaciones li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.conversacion {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: 1.5px solid transparent;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+  color: var(--tinta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversacion:hover { border-color: var(--tinta-suave); }
+.conversacion.activa {
+  border-color: var(--tinta);
+  background: var(--blanco);
+  font-weight: 700;
+}
+.borrar {
+  background: none;
+  border: none;
+  color: var(--tinta-suave);
+  padding: 0.2rem 0.35rem;
+}
+.borrar:hover { color: var(--margen); }
+
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 main {
   flex: 1;
   overflow-y: auto;
@@ -66,7 +132,7 @@ main {
 }
 main::before {
   content: "";
-  position: fixed;
+  position: absolute;
   top: 0; bottom: 0;
   left: 2.5rem;
   width: 2px;
@@ -240,7 +306,16 @@ textarea {
 }
 #pantalla-acceso .boton-enviar { padding: 0.6rem; }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   header, main, form { padding-left: 2.75rem; }
   main::before { left: 1.9rem; }
+
+  /* En pantallas chicas la barra se va arriba y se desliza de lado */
+  .contenido { flex-direction: column; }
+  #barra {
+    width: auto;
+    border-right: none;
+    border-bottom: 2px solid var(--tinta);
+    max-height: 9rem;
+  }
 }

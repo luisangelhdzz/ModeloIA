@@ -11,6 +11,7 @@ const $formChat = document.getElementById("form-chat");
 const $entrada = document.getElementById("entrada");
 const $enviar = document.getElementById("enviar");
 const $quien = document.getElementById("quien");
+const $lista = document.getElementById("lista-conversaciones");
 const $pantallaAcceso = document.getElementById("pantalla-acceso");
 const $formAcceso = document.getElementById("form-acceso");
 const $accesoTitulo = document.getElementById("acceso-titulo");
@@ -44,6 +45,7 @@ function encabezados() {
 function cerrarSesion() {
   token = null;
   usuario = null;
+  $lista.innerHTML = "";
   localStorage.removeItem("token");
   localStorage.removeItem("usuario");
   threadId = null;
@@ -113,6 +115,75 @@ function mostrarVacio() {
   $mensajes.appendChild(p);
 }
 
+// ---------- Conversaciones guardadas ----------
+
+async function cargarConversaciones() {
+  try {
+    const res = await fetch("/conversaciones", { headers: encabezados() });
+    if (!res.ok) return;
+    const { conversaciones } = await res.json();
+
+    $lista.innerHTML = "";
+    for (const conv of conversaciones) {
+      const li = document.createElement("li");
+
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.className = "conversacion" + (conv.thread_id === threadId ? " activa" : "");
+      boton.textContent = conv.titulo;
+      boton.title = conv.titulo;
+      boton.addEventListener("click", () => abrirConversacion(conv.thread_id));
+
+      const borrar = document.createElement("button");
+      borrar.type = "button";
+      borrar.className = "borrar";
+      borrar.textContent = "✕";
+      borrar.title = "Borrar conversación";
+      borrar.addEventListener("click", () => borrarConversacion(conv.thread_id));
+
+      li.append(boton, borrar);
+      $lista.appendChild(li);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function abrirConversacion(id) {
+  try {
+    const res = await fetch(`/conversaciones/${id}/mensajes`, { headers: encabezados() });
+    if (!res.ok) throw new Error("No se pudo abrir");
+    const { mensajes } = await res.json();
+
+    threadId = id;
+    $mensajes.innerHTML = "";
+    for (const m of mensajes) {
+      agregarMensaje(m.rol === "tutor" ? "tutor" : "alumno", m.contenido);
+    }
+    cargarConversaciones(); // para marcar cuál está activa
+  } catch (error) {
+    agregarMensaje("error", error.message);
+  }
+}
+
+async function borrarConversacion(id) {
+  if (!confirm("¿Borrar esta conversación?")) return;
+  try {
+    const res = await fetch(`/conversaciones/${id}`, {
+      method: "DELETE",
+      headers: encabezados(),
+    });
+    if (!res.ok) throw new Error("No se pudo borrar");
+    if (threadId === id) {
+      threadId = null;
+      mostrarVacio();
+    }
+    cargarConversaciones();
+  } catch (error) {
+    agregarMensaje("error", error.message);
+  }
+}
+
 // ---------- Hablar con NUESTRO servidor (no con Backboard) ----------
 async function enviar(texto) {
   const cuerpo = { mensaje: texto }; // el usuario ya va dentro del token
@@ -144,11 +215,14 @@ $formChat.addEventListener("submit", async (e) => {
 
   const pensando = agregarMensaje("pensando", "El tutor está pensando…");
 
+  const eraNueva = !threadId;
+
   try {
     const datos = await enviar(texto);
     threadId = datos.thread_id; // guardamos la conversación para el siguiente mensaje
     pensando.remove();
     agregarMensaje("tutor", datos.respuesta);
+    if (eraNueva) cargarConversaciones(); // aparece en la barra lateral
   } catch (error) {
     pensando.remove();
     agregarMensaje("error", `No se pudo obtener respuesta: ${error.message}`);
@@ -170,6 +244,7 @@ $entrada.addEventListener("keydown", (e) => {
 document.getElementById("nueva").addEventListener("click", () => {
   threadId = null; // conversación nueva, pero la memoria del usuario se conserva
   mostrarVacio();
+  cargarConversaciones();
 });
 
 document.getElementById("salir").addEventListener("click", cerrarSesion);
@@ -237,8 +312,9 @@ function iniciar() {
     return;
   }
   $pantallaAcceso.hidden = true;
-  $quien.textContent = `Usuario: ${usuario}`;
+  $quien.textContent = usuario;
   mostrarVacio();
+  cargarConversaciones();
   $entrada.focus();
 }
 

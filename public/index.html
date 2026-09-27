@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MikiIA</title>
+  <title>MadelineIA</title>
 
   <!-- Fuentes -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,22 +19,31 @@
 </head>
 <body>
   <header>
-    <h1>MikiIA</h1>
+    <h1>MadelineIA</h1>
     <div>
       <span id="quien"></span>
-      <button type="button" class="boton-texto" id="nueva">Nueva conversación</button>
       <button type="button" class="boton-texto" id="salir">Cerrar sesión</button>
     </div>
   </header>
 
-  <main id="scroll">
-    <div id="mensajes" aria-live="polite"></div>
-  </main>
+  <div class="contenido">
+    <!-- Barra lateral con las conversaciones guardadas -->
+    <aside id="barra">
+      <button type="button" class="boton-enviar" id="nueva">+ Nueva conversación</button>
+      <ul id="lista-conversaciones"></ul>
+    </aside>
 
-  <form id="form-chat">
-    <textarea id="entrada" rows="1" placeholder="Pregúntale algo a tu tutor…" aria-label="Tu mensaje"></textarea>
-    <button type="submit" class="boton-enviar" id="enviar">Enviar</button>
-  </form>
+    <section class="chat">
+      <main id="scroll">
+        <div id="mensajes" aria-live="polite"></div>
+      </main>
+
+      <form id="form-chat">
+        <textarea id="entrada" rows="1" placeholder="Pregúntale algo a tu tutor…" aria-label="Tu mensaje"></textarea>
+        <button type="submit" class="boton-enviar" id="enviar">Enviar</button>
+      </form>
+    </section>
+  </div>
 
   <!-- Pantalla de acceso: entrar o crear cuenta -->
   <div id="pantalla-acceso" hidden>

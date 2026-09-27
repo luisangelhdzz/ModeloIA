@@ -1,5 +1,13 @@
+# Secretos: nunca subir
 .env
-node_modules/
-estado.json
-usuarios.json
 esquema.sql
+
+# Dependencias: se reinstalan con npm install
+node_modules/
+
+# Archivos viejos de cuando usábamos JSON como base de datos
+usuarios.json
+estado.json
+
+# Sistema
+.DS_Store
